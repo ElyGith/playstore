@@ -15,7 +15,7 @@ DROP COLUMN id;
 /* possibilité de récrée une table avec Select Distinct mais à éviter(si la table est très grande) pour traiter les doublons*/
 
 SELECT App
-from playstore_backup
+from playstore
 WHERE App ='Roblox';
 
 
@@ -41,10 +41,29 @@ On récupère des infos sur chaque colonnes (types, ect)
 */
     EXEC sp_help 'playstore';
 
+    -- Sélectionner les valeurs NULL , les éliminer ou les compléter si nécéssaire 
+    -- mettre de coté ces 2 valeurs (fichier data_null)
+
+SELECT *
+FROM playstore
+WHERE Content_Rating IS NULL ;
+
+SELECT *
+FROM playstore
+WHERE Android_Ver IS NULL ;
+
+SELECT *
+FROM playstore
+WHERE Current_Ver LIKE 'NaN' ;
+
+-- on supprime les lignes problématiques après les avoir stocker
+DELETE FROM playstore 
+where id=1715 OR id=3422
+
 /*
 Change le nom pour éviter les erreurs de compilation (à) l'initial c'était Type)
 */
-EXEC sp_rename 'playstore.Mode achat', 'Mode_achat', 'COLUMN';
+EXEC sp_rename 'playstore.Type', 'Mode_achat', 'COLUMN';
 
 
     /* Compte et affiche le nombre de doublons */
@@ -83,12 +102,11 @@ WHERE id IN (
 );
 
 COMMIT TRANSACTION
+
 -- ROLLBACK;
 
--- Sélectionner les valeurs NULL , les éliminer ou les compléter si nécéssaire (ici App est notNull inutile)
-SELECT *
-FROM playstore
-WHERE App IS NULL ;
+
+
 
 -- Je dois changer le type de Size, Installs, Price qui sont des nvarchar alors que ce sont censé être des valeurs
 SELECT top 20 Size, Installs,Price
@@ -145,12 +163,23 @@ EXEC sp_help 'playstore';
 
 
 
-
+--Pour Size on va laissé en chaine de caractère pour la partie 'Varies with devices' 
 SELECT distinct Size
 from playstore;
 
 
+SELECT Size,COUNT(App)
+from playstore
+--where size LIKE 'V%'
+group by Size
+order by Size DESC
 
+BEGIN TRANSACTION
+
+UPDATE playstore
+SET Size =REPLACE(Size,'k','000')
+
+COMMIT;
 
 --remettre en nvarchar pour pouvoir récuperer les données du backup
 ALTER TABLE playstore
@@ -165,3 +194,27 @@ EXEC sp_help 'playstore_backup';
 --annule tout ce qui est entre begin et rollback
 ROLLBACK;
 
+
+--Fonction qui récupère le nom de toutes les colonnes et qui effectue une même opération sur chacune (ici LIKE 'NaN)
+--1465 au total dont 1460 Rating et 7 Current Ver , j'imagine qu'il doit y avoir 2 qui ont 2 NaN (4 NaN Rating dans les Current_Ver)
+DECLARE @sql nvarchar(max) ='';
+DECLARE @table NVARCHAR(max) ='playstore';
+DECLARE @parametre NVARCHAR(MAX) = 'LIKE  ''NaN''  ';
+
+
+SELECT @sql =  STRING_AGG( COLUMN_NAME + ' '+@parametre,'  OR ')
+from INFORMATION_SCHEMA.COLUMNS
+where TABLE_NAME=@table
+
+SET @sql = 'SELECT * FROM ' + @table + ' WHERE ' + @sql;
+PRINT @sql;
+
+
+EXEC sp_executesql @sql;
+
+
+-------------------------------------------------------------------------------------
+
+SELECT *
+FROM playstore
+WHERE Current_Ver LIKE 'NaN';
